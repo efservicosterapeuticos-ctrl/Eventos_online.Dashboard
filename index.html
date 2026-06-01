@@ -322,7 +322,7 @@
   <div class="topbar">
     <div class="sheet-input-group">
       <label>Apps Script</label>
-      <input type="text" class="sheet-input" id="sheetUrl" placeholder="Opcional: cole a URL /exec do Apps Script. Sem URL, usa os dados embutidos da T10." value="">
+      <input type="text" class="sheet-input" id="sheetUrl" placeholder="Cole a URL da planilha (docs.google.com/spreadsheets/...) ou do Apps Script (/exec)" value="">
     </div>
     <div class="event-name-group">
       <label>Evento</label>
@@ -567,39 +567,100 @@ function showSection(name, evt) {
 async function loadData() {
   showLoading(true);
   try {
-    let apiUrl = document.getElementById('sheetUrl').value.trim() || APPS_SCRIPT_URL;
-    if (!apiUrl) throw new Error('Sem Apps Script configurado. Usando dados embutidos.');
-    const json = await loadFromAppsScript(apiUrl);
-    if (!json || !json.ok || !Array.isArray(json.data) || !json.data.length) throw new Error('O Apps Script respondeu, mas não retornou dados válidos.');
+    const url = (document.getElementById('sheetUrl').value.trim() || APPS_SCRIPT_URL).trim();
+    if (!url) throw new Error('Cole a URL da planilha ou do Apps Script no campo acima.');
+
+    const json = isSheetUrl(url)
+      ? await loadFromGoogleSheet(url)
+      : await loadFromAppsScript(url);
+
+    if (!json?.ok || !json.data?.length) throw new Error('Sem dados. Verifique se a planilha tem respostas e está pública.');
+
     allData = json.data.map(normalizeRow).filter(r => r.nome || r.depoimento);
-    document.getElementById('lastSync').textContent = 'Dados sincronizados via Apps Script em: ' + new Date().toLocaleString('pt-BR');
-    showToast('✓ Dados carregados do Apps Script.');
-  } catch (e) {
+    document.getElementById('lastSync').textContent = 'Sincronizado em: ' + new Date().toLocaleString('pt-BR');
+    showToast('✓ Dados carregados com sucesso!');
+  } catch(e) {
     console.warn(e);
-    allData = getEmbeddedData();
-    document.getElementById('lastSync').textContent = 'Dados embutidos da T10 — ' + new Date().toLocaleString('pt-BR');
-    showToast('✓ Dados embutidos da T10 carregados.');
+    document.getElementById('lastSync').textContent = '⚠ ' + e.message;
+    showToast('⚠ ' + e.message);
   }
   renderAll();
   showLoading(false);
 }
 
-function loadFromAppsScript(apiUrl) {
+// ─── DETECÇÃO DE TIPO DE URL ──────────────────────────────────────────
+function isSheetUrl(url) { return url.includes('docs.google.com/spreadsheets'); }
+function extractSheetId(url) { const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); return m ? m[1] : null; }
+
+// ─── LOAD VIA GOOGLE SHEETS (gviz/tq JSONP) ──────────────────────────
+function loadFromGoogleSheet(url) {
+  const id = extractSheetId(url);
+  if (!id) return Promise.reject(new Error('URL de planilha inválida.'));
+  const cb = 'gvizCb_' + Date.now() + '_' + Math.floor(Math.random() * 1e5);
+  const src = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json;responseHandler:${cb}&headers=1`;
+  const script = document.createElement('script');
   return new Promise((resolve, reject) => {
-    const callbackName = 'appsScriptCallback_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-    const separator = apiUrl.includes('?') ? '&' : '?';
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => { cleanup(); reject(new Error('Tempo esgotado ao carregar o Apps Script.')); }, 20000);
-    function cleanup() {
-      clearTimeout(timeout);
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    }
-    window[callbackName] = data => { cleanup(); resolve(data); };
-    script.onerror = () => { cleanup(); reject(new Error('Erro ao carregar o Apps Script.')); };
-    script.src = apiUrl + separator + 'action=list&callback=' + encodeURIComponent(callbackName) + '&_=' + Date.now();
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Tempo esgotado. Verifique se a planilha está pública.')); }, 15000);
+    function cleanup() { clearTimeout(timer); delete window[cb]; if (script.parentNode) script.parentNode.removeChild(script); }
+    window[cb] = function(res) {
+      cleanup();
+      try {
+        if (res.status !== 'ok') throw new Error('Erro na planilha: ' + (res.errors?.[0]?.message || 'desconhecido'));
+        resolve({ ok: true, data: parseGvizTable(res.table) });
+      } catch(e) { reject(e); }
+    };
+    script.onerror = () => { cleanup(); reject(new Error('Não foi possível acessar a planilha. Certifique-se de que está pública.')); };
+    script.src = src;
     document.body.appendChild(script);
   });
+}
+
+// ─── LOAD VIA APPS SCRIPT (JSONP) ────────────────────────────────────
+function loadFromAppsScript(apiUrl) {
+  return new Promise((resolve, reject) => {
+    const cb = 'asCb_' + Date.now() + '_' + Math.floor(Math.random() * 1e5);
+    const sep = apiUrl.includes('?') ? '&' : '?';
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Tempo esgotado ao carregar o Apps Script.')); }, 20000);
+    function cleanup() { clearTimeout(timer); delete window[cb]; if (script.parentNode) script.parentNode.removeChild(script); }
+    window[cb] = data => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('Erro ao carregar o Apps Script.')); };
+    script.src = apiUrl + sep + 'action=list&callback=' + encodeURIComponent(cb) + '&_=' + Date.now();
+    document.body.appendChild(script);
+  });
+}
+
+// ─── PARSE GVIZ TABLE ────────────────────────────────────────────────
+function parseGvizTable(table) {
+  if (!table?.cols?.length) throw new Error('Planilha vazia ou sem colunas reconhecidas.');
+  const headers = table.cols.map(c => mapHeader(c.label || c.id || ''));
+  return (table.rows || []).map(row => {
+    const obj = {};
+    headers.forEach((key, i) => {
+      if (!key) return;
+      const cell = row.c?.[i];
+      let v = cell?.v ?? '';
+      if (typeof v === 'string' && v.startsWith('Date(')) v = gvizDateStr(v);
+      if (['nota'].includes(key)) v = parseFloat(v) || 0;
+      obj[key] = v;
+    });
+    return obj;
+  }).filter(r => Object.values(r).some(v => v !== '' && v !== 0 && v !== null && v !== undefined));
+}
+
+function gvizDateStr(v) {
+  const p = v.slice(5, -1).split(',').map(Number);
+  return new Date(p[0], p[1], p[2], p[3]||0, p[4]||0, p[5]||0).toLocaleString('pt-BR');
+}
+
+function mapHeader(h) {
+  const s = h.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (s.includes('carimbo') || s.includes('timestamp') || s.includes('data/hora'))   return 'timestamp';
+  if (s.includes('nota') || s.includes('satisfa'))                                    return 'nota';
+  if (s.includes('depoimento') || s.includes('transform') || s.includes('mudanca'))  return 'depoimento';
+  if (s.includes('motivo') || s.includes('por que') || s.includes('deu essa nota'))  return 'motivo';
+  if (s.includes('nome') || s.includes('identif') || s.includes('como voce se'))     return 'nome';
+  return null;
 }
 
 function renderAll() {
