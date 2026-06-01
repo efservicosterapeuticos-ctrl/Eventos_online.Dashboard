@@ -473,75 +473,6 @@ const APPS_SCRIPT_URL = "";
 let allData = [];
 let charts = {};
 
-function getEmbeddedData() {
-  return [
-    {
-      timestamp: "20/05/2026 15:30:20",
-      nome: "Morgana Cagliari Betti",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Porque foi magnífico",
-      depoimento: "Quero deixar meu relato sobre a T10 que tive durante três segundas-feiras. Foi uma experiência magnífica, maravilhosa, gratificante e muito proveitosa. Cada encontro trouxe aprendizados, reflexões e momentos que levarei comigo para a vida.\nVou carregar comigo todos os ensinamentos e práticas do dia a dia, pois foram essenciais para meu crescimento pessoal. Foi uma superação grandiosa, um momento de muito aprendizado e transformação. Além da T10, estou também realizando um curso de reiki para aperfeiçoar ainda mais minha vida, meu equilíbrio e meu desenvolvimento pessoal.\nSou imensamente grata por tudo o que vivi, pelo acolhimento, dedicação e ensinamentos compartilhados. Sem dúvidas, foi uma experiência enriquecedora que marcou minha caminhada e ficará guardada com muito carinho no meu coração. Gratidão!"
-    },
-    {
-      timestamp: "21/05/2026 12:58:30",
-      nome: "Janifer da Silva Bassani Angioleto",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "As mentorias do Grupo da Elis sempre são maravilhosas, e sempre estão inovando para trazer bons conselhos e conteúdos para mudança da nossa vida.",
-      depoimento: "Eu tive mudanças muito fortes em relação a minha vida, casamento, trabalho e até mesmo como mãe. Sentimentos que não entendia, e através dessas aulas e mais o acompanhamento da equipe, me fizeram ver a vida de uma forma diferente e me reencontrar como pessoa. Gratidão sempre."
-    },
-    {
-      timestamp: "21/05/2026 13:05:49",
-      nome: "Silvana Lúcia Rosa",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Pois cada trabalho, cada mentoria, a entrega é muito grande e o resultado é transformador na vida da gente.",
-      depoimento: "Minha vida mudou muito depois que conheci a Elis. Já fiz várias mentorias com ela, e a T10 está me abrindo caminhos, abrindo pensamentos, decisões que antes eu não pensava em ter. Ainda estou em um trabalho bem grande, me reorganizando dentro de mim, mas estou me surpreendendo comigo mesma dia após dia."
-    },
-    {
-      timestamp: "21/05/2026 13:39:48",
-      nome: "Sandra Regina Rosa",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Porque eu consegui fazer algumas mudanças no meu dia a dia, no relacionamento familiar e aprendi muitas coisas boas.",
-      depoimento: "Estou me surpreendendo por conseguir ficar sem gastar em coisas supérfluas, que eu acabava gastando a mais do que eu recebo. Outra coisa: estou conseguindo conversar mais com minha família. Só não consegui ainda fazer a carta para o meu marido, mas vou fazer."
-    },
-    {
-      timestamp: "21/05/2026 13:51:50",
-      nome: "Francieli Rufatto",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Equipe que realmente preza pela mudança de vida de nós mulheres.",
-      depoimento: "Sou outra mulher. Por muitas vezes não me reconheço: vida nova, novos olhares, novas conquistas, novos recomeços, tudo depois que conheci o grupo da Elis."
-    },
-    {
-      timestamp: "21/05/2026 13:52:59",
-      nome: "Sandra Regina Rosa",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Porque eu consegui fazer algumas mudanças na minha vida, muitas coisas boas acontecendo para mim.",
-      depoimento: "Estou me surpreendendo comigo por conseguir ficar sem gastar em coisas supérfluas, que eu acabava gastando além do que eu recebo do meu salário. Isto estava me incomodando muito, agora estou mais tranquila. Outra coisa que eu não fiz ainda é a carta para o marido, mas vou fazer."
-    },
-    {
-      timestamp: "21/05/2026 22:17:52",
-      nome: "Luciane Prediger",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Como sempre, temos muitos aprendizados.",
-      depoimento: "Estou fazendo vários movimentos de olhar para dentro de mim. Evoluir. Já obtive grandes melhorias, principalmente na questão da vivacidade. Olhar verdadeiramente para a vida e receber o que ela tem para dar. Ser grata de coração e com a alma."
-    },
-    {
-      timestamp: "21/05/2026 23:05:29",
-      nome: "Claudia",
-      notaTexto: "5 - muito satisfeita",
-      nota: 5,
-      motivo: "Pelo nível de conhecimento da Elis e entrega, com todo seu coração. Tudo bem organizado nas aulas e no pós também.",
-      depoimento: "Sendo sincera, não cumpri com tudo o que havíamos acordado em fazer. Mas bons hábitos que estou praticando: o da oração pela noite e manhã, feita com o coração aberto. Na minha loja, todas as manhãs oramos antes de começarmos a trabalhar. Mais serenidade e estou me expondo menos, me reservando mais."
-    }
-  ];
-}
-
 function normalizeRow(row) {
   const get = (...keys) => keys.map(k => row[k]).find(v => v !== undefined && v !== null && String(v).trim() !== '') || '';
   const notaRaw = get('nota', 'satisfacao', 'Em uma escala de 0 para insatisfeita e 5 para muito satisfeita, qual a sua nota?');
@@ -639,9 +570,8 @@ function parseGvizTable(table) {
     headers.forEach((key, i) => {
       if (!key) return;
       const cell = row.c?.[i];
-      let v = cell?.v ?? '';
+      let v = cell?.f ?? cell?.v ?? '';
       if (typeof v === 'string' && v.startsWith('Date(')) v = gvizDateStr(v);
-      if (['nota'].includes(key)) v = parseFloat(v) || 0;
       obj[key] = v;
     });
     return obj;
@@ -697,6 +627,8 @@ function renderChartNotas() {
     type: 'doughnut',
     data: { labels, datasets: [{ data: values, backgroundColor: ['#D4C4A8','#C8973A','#4A7C59','#8B6340','#526D9B','#4A7C59'], borderWidth: 0, hoverOffset: 6 }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       cutout: '68%',
       plugins: {
         legend: { position: 'bottom', labels: { font: { family: 'DM Sans', size: 12 }, color: '#2C1A0E', padding: 16, boxWidth: 12 } },
@@ -718,6 +650,8 @@ function renderChartDatas() {
     type: 'bar',
     data: { labels: sorted.map(x => x[0]), datasets: [{ data: sorted.map(x => x[1]), backgroundColor: '#C8973A', borderRadius: 7, borderSkipped: false }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       scales: {
         y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: 'DM Sans', size: 11 }, color: '#7A5C42' }, grid: { color: '#EDE6D6' } },
         x: { grid: { display: false }, ticks: { font: { family: 'DM Sans', size: 12 }, color: '#2C1A0E' } }
@@ -737,6 +671,8 @@ function renderChartTemas() {
       datasets: [{ data: temas.map(t => t.qtd), backgroundColor: ['#4A7C59','#C8973A','#8B6340','#526D9B','#A95D5D','#6BA082'], borderRadius: 7, borderSkipped: false }]
     },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       indexAxis: 'y',
       scales: {
         x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: 'DM Sans', size: 11 }, color: '#7A5C42' }, grid: { color: '#EDE6D6' } },
