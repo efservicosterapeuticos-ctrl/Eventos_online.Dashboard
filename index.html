@@ -586,9 +586,9 @@ function gvizDateStr(v) {
 function mapHeader(h) {
   const s = h.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (s.includes('carimbo') || s.includes('timestamp') || s.includes('data/hora'))   return 'timestamp';
+  if (s.includes('motivo') || s.includes('por que') || s.includes('deu essa nota'))  return 'motivo';
   if (s.includes('nota') || s.includes('satisfa'))                                    return 'nota';
   if (s.includes('depoimento') || s.includes('transform') || s.includes('mudanca'))  return 'depoimento';
-  if (s.includes('motivo') || s.includes('por que') || s.includes('deu essa nota'))  return 'motivo';
   if (s.includes('nome') || s.includes('identif') || s.includes('como voce se'))     return 'nome';
   return null;
 }
